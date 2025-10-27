@@ -1,0 +1,81 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.nicole.tfg</groupId>
+  <artifactId>MongoTest</artifactId>
+  <packaging>jar</packaging>
+  <version>1.0-SNAPSHOT</version>
+  <name>MongoTest</name>
+  <url>http://maven.apache.org</url>
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>3.8.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongodb-driver-sync</artifactId>
+      <version>4.11.1</version>
+        </dependency>
+          <dependency>
+          <groupId>redis.clients</groupId>
+          <artifactId>jedis</artifactId>
+          <version>5.1.0</version>
+     </dependency>
+
+
+  </dependencies>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <!-- Con JDK 9+ lo mejor es usar release -->
+    <maven.compiler.release>21</maven.compiler.release>
+</properties>
+  <build>
+          <plugins>
+        <!-- Forzamos a usar javac del JDK -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.13.0</version>
+            <configuration>
+                <release>21</release>
+                <fork>true</fork>          <!-- obliga a lanzar el javac real -->
+            </configuration>
+        </plugin>
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.1.0</version>
+            <configuration>
+                  <mainClass>${main.class}</mainClass>
+            </configuration>
+        </plugin>
+    </plugins>
+    </build>
+    <profiles>
+      <profile>
+        <id>mongo7</id>
+        <properties>
+          <main.class>com.nicole.tfg.Mongo7</main.class>
+        </properties>
+      </profile>
+      <profile>
+        <id>mongo8</id>
+        <properties>
+          <main.class>com.nicole.tfg.Mongo8</main.class>
+        </properties>
+      </profile>
+          <profile>
+          <id>redis</id>
+          <properties>
+            <main.class>com.nicole.tfg.Redis</main.class>
+          </properties>
+    </profile>
+
+    </profiles>
+
+</project>

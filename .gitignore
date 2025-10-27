@@ -1,0 +1,16 @@
+Set-Location C:\Users\nicol\TFG_Nialmeid\TFG_nialmeid
+
+@"
+# Maven
+target/
+*.log
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# SO
+.DS_Store
+Thumbs.db
+"@ | Out-File -Encoding utf8 .gitignore
