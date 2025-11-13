@@ -17,10 +17,15 @@ public class Mongo7 implements DatabaseClient {
     }
 
     @Override
-    public void write(String key, String value) throws Exception {
-        Document doc = new Document("_id", key).append("mensaje", value);
-        collection.insertOne(doc);
-    }
+public void write(String key, String value) throws Exception {
+    Document doc = new Document("_id", key).append("mensaje", value);
+
+    collection.replaceOne(
+            new Document("_id", key),
+            doc,
+            new com.mongodb.client.model.ReplaceOptions().upsert(true)
+    );
+}
 
     @Override
     public String read(String key) throws Exception {
