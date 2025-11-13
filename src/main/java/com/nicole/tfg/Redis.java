@@ -1,30 +1,36 @@
 package com.nicole.tfg;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
-public class Redis {
+public class Redis implements DatabaseClient{
+    private JedisPool pool; // pool de conexiones 
 
-      public static void main(String[] args) {
-        String host = "localhost";
-        int port = 6379;
+    @Override
+    public void open() throws Exception {
+        pool = new JedisPool("localhost", 6379);
+    }
 
-        try (Jedis jedis = new Jedis(host, port)) {
-            System.out.println("Conectado a Redis en " + host + ":" + port);
+    @Override
+    public void write(String key, String value) throws Exception {
+        try (Jedis jedis = pool.getResource()) {
+            jedis.set(key, value);
+        }
+    }
 
-            // Escribir
-            String clave = "mensaje";
-            String valor = "Hola Redis";
-            jedis.set(clave, valor);
-            System.out.println("Valor guardado: " + clave + " = " + valor);
+    @Override
+    public String read(String key) throws Exception {
+        try (Jedis jedis = pool.getResource()) {
+            return jedis.get(key);
+        }
+    }
 
-            // Leer
-            String leido = jedis.get(clave);
-            System.out.println("Valor leído: " + leido);
-
-        } catch (Exception e) {
-            System.out.println("Error al conectar con Redis:");
-            e.printStackTrace();
+    @Override
+    public void close() throws Exception {
+        if (pool != null) {
+            pool.close();
         }
     }
     
+
 }

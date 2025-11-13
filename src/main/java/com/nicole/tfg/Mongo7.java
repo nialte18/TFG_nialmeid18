@@ -3,33 +3,34 @@ package com.nicole.tfg;
 import com.mongodb.client.*;
 import org.bson.Document;
 
-public class Mongo7 {
+public class Mongo7 implements DatabaseClient {
 
-    public static void main(String[] args) {
-        // URI del contenedor mongo7
+    private MongoClient client; // cliente java de MongoDB,maneja la conexión con el serv Mongo
+    private MongoCollection<Document> collection; // la "tabla" donde se guardarán los datos
+
+    @Override
+    public void open() throws Exception {
         String uri = "mongodb://localhost:27017";
-
-        try (MongoClient mongoClient = MongoClients.create(uri)) {
-
-            MongoDatabase database = mongoClient.getDatabase("tfg_mongo7");
-            MongoCollection<Document> collection = database.getCollection("mensajes");
-
-            // Escribir
-            String mensaje = "Hola MongoDB 7";
-            Document doc = new Document("mensaje", mensaje);
-            collection.insertOne(doc);
-            System.out.println(" Mensaje guardado: " + mensaje);
-
-            // Lectura
-            Document resultado = collection.find().first();
-            if (resultado != null) {
-                System.out.println("Mensaje leído: " + resultado.getString("mensaje"));
-            } else {
-                System.out.println(" No se encontró ningún mensaje.");
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        client = MongoClients.create(uri);
+        MongoDatabase database = client.getDatabase("tfg_mongo7");
+        collection = database.getCollection("mensajes");
     }
+
+    @Override
+    public void write(String key, String value) throws Exception {
+        Document doc = new Document("_id", key).append("mensaje", value);
+        collection.insertOne(doc);
+    }
+
+    @Override
+    public String read(String key) throws Exception {
+         Document res = collection.find(new Document("_id", key)).first();
+        return (res == null) ? null : res.getString("mensaje");
+    }
+
+    @Override
+    public void close() throws Exception {
+          if (client != null) client.close();
+    }
+
 }

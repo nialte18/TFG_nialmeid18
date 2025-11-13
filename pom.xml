@@ -57,23 +57,12 @@
     </plugins>
     </build>
     <profiles>
-      <profile>
-        <id>mongo7</id>
+      
+        <profile>
+        <id>prueba</id>
         <properties>
-          <main.class>com.nicole.tfg.Mongo7</main.class>
+          <main.class>com.nicole.tfg.MainPrueba</main.class>
         </properties>
-      </profile>
-      <profile>
-        <id>mongo8</id>
-        <properties>
-          <main.class>com.nicole.tfg.Mongo8</main.class>
-        </properties>
-      </profile>
-          <profile>
-          <id>redis</id>
-          <properties>
-            <main.class>com.nicole.tfg.Redis</main.class>
-          </properties>
     </profile>
 
     </profiles>
