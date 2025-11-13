@@ -56,15 +56,60 @@
         </plugin>
     </plugins>
     </build>
-    <profiles>
-      
-        <profile>
+   <profiles>
+
+    <!-- PERFIL PARA PRUEBAS LOCALES (MAINPRUEBA) -->
+    <profile>
         <id>prueba</id>
-        <properties>
-          <main.class>com.nicole.tfg.MainPrueba</main.class>
-        </properties>
+        <build>
+            <plugins>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>3.1.0</version>
+                    <configuration>
+                        <mainClass>com.nicole.tfg.MainPrueba</mainClass>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </build>
     </profile>
 
-    </profiles>
+    <!-- PERFIL SERVIDOR (ServidorTransaccionesSimple) -->
+    <profile>
+        <id>servidor</id>
+        <build>
+            <plugins>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>3.1.0</version>
+                    <configuration>
+                        <mainClass>com.nicole.tfg.ServidorTransaccionesSimple</mainClass>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </build>
+    </profile>
+
+    <!-- PERFIL CLIENTE (ClienteTransaccionesSimple) -->
+    <profile>
+        <id>cliente</id>
+        <build>
+            <plugins>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>3.1.0</version>
+                    <configuration>
+                        <mainClass>com.nicole.tfg.ClienteTransaccionesSimple</mainClass>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </build>
+    </profile>
+
+</profiles>
+
 
 </project>
