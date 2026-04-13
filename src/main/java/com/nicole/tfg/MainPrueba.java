@@ -52,19 +52,21 @@ public class MainPrueba {
     private static void mostrarTransaccionEscritura(Transaccion tx) {
         System.out.println("=== TRANSACCIÓN DE ESCRITURA ===");
         System.out.println("ID:        " + tx.getId());
-        System.out.println("Instante:  " + tx.getInstante());
+        System.out.println("Inicio:    " + tx.getTInicial());
         System.out.println("Operación: " + tx.getOperacion());
         System.out.println("Clave:     " + tx.getClave());
         System.out.println("Valor:     " + tx.getValor());
+        System.out.println("Estado:    " + tx.getEstado());
         System.out.println();
     }
 
     private static void mostrarTransaccionLectura(Transaccion tx) {
         System.out.println("=== TRANSACCIÓN DE LECTURA ===");
         System.out.println("ID:        " + tx.getId());
-        System.out.println("Instante:  " + tx.getInstante());
+        System.out.println("Inicio:    " + tx.getTInicial());
         System.out.println("Operación: " + tx.getOperacion());
         System.out.println("Clave:     " + tx.getClave());
+        System.out.println("Estado:    " + tx.getEstado());
         System.out.println();
     }
 
