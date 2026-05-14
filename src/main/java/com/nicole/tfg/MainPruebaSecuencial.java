@@ -13,9 +13,9 @@ public class MainPruebaSecuencial {
                         Redis redis = new Redis();
                         GestorTransacciones gestor = new GestorTransacciones(mongo7, mongo8, redis);
                         gestor.abrir();
-                        // cargas
-                        double[] workloads = { 0.5, 0.8, 0.2 };
-                        // bloques en potencias de 2
+                        // cargas de porcentaje de escritura 
+                        double[] workloads = { 0.5, 0.8, 1.0 };
+                        // bloques en potencias de 2, es el nº  de transacciones
                         int[] bloques = { 2, 4, 8, 16, 32, 64, 128 };
                         Random random = new Random();
                         // Cambiamos a varias claves
@@ -26,7 +26,7 @@ public class MainPruebaSecuencial {
                                         "cuenta4"
                         };
 
-                        for (double porcentajeLectura : workloads) {
+                        for (double porcentajeEscritura: workloads) {
                                 for (int totalTransacciones : bloques) {
 
                                         int lecturas = 0;
@@ -34,7 +34,7 @@ public class MainPruebaSecuencial {
                                         long tiempoTotal = 0;
 
                                         System.out.println("\n========================");
-                                        System.out.println("WORKLOAD: " + (porcentajeLectura * 100) + "% lecturas");
+                                        System.out.println("WORKLOAD: " + (porcentajeEscritura * 100) + "% lecturas");
                                         System.out.println("TRANSACCIONES: " + totalTransacciones);
                                         System.out.println("========================");
                                         // ejecutar transacciones
@@ -45,25 +45,9 @@ public class MainPruebaSecuencial {
                                                 String clave = claves[random.nextInt(claves.length)];
                                                 long inicio = System.nanoTime();
 
-                                                // Lectura
-                                                if (decision < porcentajeLectura) {
-
-                                                        Transaccion tx = new Transaccion(
-                                                                        "lectura",
-                                                                        clave,
-                                                                        null);
-
-                                                        gestor.ejecutarLectura(tx);
-
-                                                        lecturas++;
-
-                                                }
-                                                // ESCRITURA
-
-                                                else {
-
+                                                // Escritura
+                                                if (decision < porcentajeEscritura) {
                                                         String valor = "valor_" + i;
-
                                                         Transaccion tx = new Transaccion(
                                                                         "escritura",
                                                                         clave,
@@ -72,6 +56,21 @@ public class MainPruebaSecuencial {
                                                         gestor.ejecutarEscritura(tx);
 
                                                         escrituras++;
+
+                                                }
+                                                // ESCRITURA
+
+                                                else {
+
+                                                        
+                                                                Transaccion tx = new Transaccion(
+                                                                "lectura",
+                                                                clave,
+                                                                 null);
+
+                                                        gestor.ejecutarLectura(tx);
+
+                                                        lecturas++;
 
                                                 }
 
