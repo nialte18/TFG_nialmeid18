@@ -53,7 +53,7 @@ public class MainPruebaSecuencial {
                                                                         clave,
                                                                         valor);
 
-                                                        gestor.ejecutarEscritura(tx);
+                                                        gestor.ejecutarEscritura(tx, porcentajeEscritura, totalTransacciones);
 
                                                         escrituras++;
 
@@ -68,7 +68,7 @@ public class MainPruebaSecuencial {
                                                                 clave,
                                                                  null);
 
-                                                        gestor.ejecutarLectura(tx);
+                                                        gestor.ejecutarLectura(tx,porcentajeEscritura, totalTransacciones);
 
                                                         lecturas++;
 

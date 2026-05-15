@@ -7,6 +7,7 @@ public class Mongo7 implements DatabaseClient {
 
     private MongoClient client; // cliente java de MongoDB,maneja la conexión con el serv Mongo
     private MongoCollection<Document> collection; // la "tabla" donde se guardarán los datos
+    private MongoCollection<Document> collectionHistorico; // información de las Transacciones
 
     @Override
     public void open() throws Exception {
@@ -14,6 +15,7 @@ public class Mongo7 implements DatabaseClient {
         client = MongoClients.create(uri);
         MongoDatabase database = client.getDatabase("tfg_mongo7");
         collection = database.getCollection("mensajes");
+        collectionHistorico = database.getCollection("historico");
     }
 
     @Override
@@ -37,5 +39,21 @@ public void write(String key, String value) throws Exception {
     public void close() throws Exception {
           if (client != null) client.close();
     }
+   public void guardarHistorico(String id,
+                             long tiempoInicio,
+                             long tiempoFinal,
+                             long duracion,
+                             double workload,
+                             int bloque) {
+
+    Document historicoDoc = new Document("_id", id)
+            .append("tiempoInicio", tiempoInicio)
+            .append("tiempoFinal", tiempoFinal)
+            .append("duracionMs", duracion)
+            .append("workload", workload)
+            .append("bloque", bloque);
+
+    collectionHistorico.insertOne(historicoDoc);
+}
 
 }

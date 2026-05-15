@@ -51,7 +51,7 @@ public class ServidorTransaccionesSimple {
                     String valor = partes[2];
 
                     Transaccion txW = new Transaccion("escritura", clave, valor);
-                    gestor.ejecutarEscritura(txW);
+                    gestor.ejecutarEscritura(txW,0,0);
 
                     out.println("OK WRITE clave=" + clave);
 
@@ -63,7 +63,7 @@ public class ServidorTransaccionesSimple {
                     String clave = partes[1];
 
                     Transaccion txR = new Transaccion("lectura", clave, null);
-                    Map<String,String> res = gestor.ejecutarLectura(txR);
+                    Map<String,String> res = gestor.ejecutarLectura(txR,0,0);
 
                     String v7 = res.get("mongo7");
                     String v8 = res.get("mongo8");
