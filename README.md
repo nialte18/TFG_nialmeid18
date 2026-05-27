@@ -16,3 +16,24 @@ mvn -Pservidor exec:java
 
 # Ejecutar el cliente de transacciones
 mvn -Pcliente exec:java
+## Funcionalidades actuales
+- Ejecución secuencial de transacciones
+- Workloads configurables:
+  - 50/50
+  - 80/20
+  - 100/0
+- Persistencia del histórico de transacciones en MongoDB
+- Cálculo de latencia media
+- Exportación de resultados para análisis en Excel
+
+## Histórico de transacciones
+Cada transacción ejecutada se almacena en la colección `historico` de MongoDB 7 con la siguiente información:
+- ID de transacción
+- Tiempo de inicio
+- Tiempo final
+- Duración en ms
+- Workload
+- Tamaño de bloque
+
+## Resultados experimentales
+Los datos obtenidos pueden exportarse a CSV y analizarse posteriormente mediante tablas dinámicas y gráficas en Excel.
