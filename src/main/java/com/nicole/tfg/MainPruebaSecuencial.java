@@ -1,6 +1,9 @@
 package com.nicole.tfg;
 
 import java.util.Random;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class MainPruebaSecuencial {
 
@@ -26,7 +29,7 @@ public class MainPruebaSecuencial {
                                         "cuenta4"
                         };
 
-                        for (double porcentajeEscritura: workloads) {
+                        for (double porcentajeLectura: workloads) {
                                 for (int totalTransacciones : bloques) {
 
                                         int lecturas = 0;
@@ -34,43 +37,69 @@ public class MainPruebaSecuencial {
                                         long tiempoTotal = 0;
 
                                         System.out.println("\n========================");
-                                        System.out.println("WORKLOAD: " + (porcentajeEscritura * 100) + "% lecturas");
+                                        System.out.println("WORKLOAD: " + (porcentajeLectura * 100) + "% lecturas");
                                         System.out.println("TRANSACCIONES: " + totalTransacciones);
                                         System.out.println("========================");
+
+                                        // nº exacto de L y E
+                                        lecturas = (int) Math.round( porcentajeLectura * totalTransacciones);
+                                        escrituras = totalTransacciones - lecturas;
+
+                                        //Lista para el tipo de operaciones 
+                                        List<String> listaTipoPeticion = new ArrayList<>();
+
+                                        // Añadir lecturas
+                                        for (int i = 0; i < lecturas; i++) {
+                                        listaTipoPeticion.add("L");
+                                        }
+
+                                        // Añadir escrituras
+                                        for (int i = 0; i < escrituras; i++) {
+                                        listaTipoPeticion.add("E");
+                                        }
+                                        // Mezcla de lista para obtener aleatoriamente las posiciones 
+                                         Collections.shuffle(listaTipoPeticion);
+
                                         // ejecutar transacciones
-                                        for (int i = 0; i < totalTransacciones; i++) {
-                                                // Elegir lectura/escritura
-                                                double decision = random.nextDouble();
+                                        for (int i = 0; i < listaTipoPeticion.size(); i++) {
+
+                                                 // Tipo de operación actual
+                                                String tipoOperacion = listaTipoPeticion.get(i);
+
                                                 // Elegir clave aleatoria
                                                 String clave = claves[random.nextInt(claves.length)];
+
                                                 long inicio = System.nanoTime();
 
-                                                // Escritura
-                                                if (decision < porcentajeEscritura) {
-                                                        String valor = "valor_" + i;
+                                                // LECTURA
+                                                if (tipoOperacion.equals("L")) {
+
                                                         Transaccion tx = new Transaccion(
-                                                                        "escritura",
-                                                                        clave,
-                                                                        valor);
-
-                                                        gestor.ejecutarEscritura(tx, porcentajeEscritura, totalTransacciones);
-
-                                                        escrituras++;
-
-                                                }
-                                                // ESCRITURA
-
-                                                else {
-
-                                                        
-                                                                Transaccion tx = new Transaccion(
                                                                 "lectura",
                                                                 clave,
-                                                                 null);
+                                                                null);
 
-                                                        gestor.ejecutarLectura(tx,porcentajeEscritura, totalTransacciones);
+                                                        gestor.ejecutarLectura(
+                                                                tx,
+                                                                porcentajeLectura,
+                                                                totalTransacciones);
 
-                                                        lecturas++;
+                                                }
+
+                                                // ESCRITURA
+                                                else {
+
+                                                        String valor = "valor_" + i;
+
+                                                        Transaccion tx = new Transaccion(
+                                                                "escritura",
+                                                                clave,
+                                                                valor);
+
+                                                        gestor.ejecutarEscritura(
+                                                                tx,
+                                                                porcentajeLectura,
+                                                                totalTransacciones);
 
                                                 }
 
@@ -79,12 +108,11 @@ public class MainPruebaSecuencial {
                                                 long duracion = (fin - inicio) / 1_000_000;
 
                                                 tiempoTotal += duracion;
-                                        }
 
-                                        // =========================
+                                                }
+
                                         // RESULTADOS
-                                        // =========================
-
+                                 
                                         System.out.println("\nRESULTADOS");
 
                                         System.out.println("Lecturas: "
@@ -102,14 +130,14 @@ public class MainPruebaSecuencial {
                                 }
                         }
 
-                       // Cerramos conexiones 
+                                        // Cerramos conexiones 
 
-                        gestor.cerrar();
+                                                gestor.cerrar();
 
-                } catch (Exception e) {
+                                        } catch (Exception e) {
 
-                        e.printStackTrace();
+                                                e.printStackTrace();
 
-                }
+                                        }
         }
 }
