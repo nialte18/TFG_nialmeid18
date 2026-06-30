@@ -16,10 +16,10 @@ public class MainPruebaSecuencial {
                         Redis redis = new Redis();
                         GestorTransacciones gestor = new GestorTransacciones(mongo7, mongo8, redis);
                         gestor.abrir();
-                        // cargas de porcentaje de escritura 
-                        double[] workloads = { 0.5, 0.8, 1.0 };
+                        // cargas de porcentaje de lecturas
+                        double[] workloads = { 0.5, 0.2, 0.0 };
                         // bloques en potencias de 2, es el nº  de transacciones
-                        int[] bloques = { 2, 4, 8, 16, 32, 64, 128 };
+                        int[] bloques = { 2, 4, 8, 16, 32, 64, 128,256,512 };
                         Random random = new Random();
                         // Cambiamos a varias claves
                         String[] claves = {
@@ -71,36 +71,33 @@ public class MainPruebaSecuencial {
 
                                                 long inicio = System.nanoTime();
 
-                                                // LECTURA
+                                                Transaccion tx;
+
                                                 if (tipoOperacion.equals("L")) {
 
-                                                        Transaccion tx = new Transaccion(
-                                                                "lectura",
-                                                                clave,
-                                                                null);
+                                                tx = new Transaccion(
+                                                        "lectura",
+                                                        clave,
+                                                        null);
 
-                                                        gestor.ejecutarLectura(
-                                                                tx,
-                                                                porcentajeLectura,
-                                                                totalTransacciones);
+                                                gestor.ejecutarLectura(
+                                                        tx,
+                                                        porcentajeLectura,
+                                                        totalTransacciones);
 
-                                                }
+                                                } else {
 
-                                                // ESCRITURA
-                                                else {
+                                                String valor = "valor_" + i;
 
-                                                        String valor = "valor_" + i;
+                                                tx = new Transaccion(
+                                                        "escritura",
+                                                        clave,
+                                                        valor);
 
-                                                        Transaccion tx = new Transaccion(
-                                                                "escritura",
-                                                                clave,
-                                                                valor);
-
-                                                        gestor.ejecutarEscritura(
-                                                                tx,
-                                                                porcentajeLectura,
-                                                                totalTransacciones);
-
+                                                gestor.ejecutarEscritura(
+                                                        tx,
+                                                        porcentajeLectura,
+                                                        totalTransacciones);
                                                 }
 
                                                 long fin = System.nanoTime();
@@ -110,6 +107,12 @@ public class MainPruebaSecuencial {
                                                 tiempoTotal += duracion;
 
                                                 }
+                                                double throughput = 0;
+                                                if (tiempoTotal > 0) {
+                                                double tiempoTotalSegundos = tiempoTotal / 1000.0;
+                                                throughput = totalTransacciones / tiempoTotalSegundos;
+                                                }
+
 
                                         // RESULTADOS
                                  
@@ -127,6 +130,7 @@ public class MainPruebaSecuencial {
                                         System.out.println("Latencia media: "
                                                         + (tiempoTotal / totalTransacciones)
                                                         + " ms");
+                                        System.out.println("Throughput: " + throughput + " transacciones/segundo");
                                 }
                         }
 
