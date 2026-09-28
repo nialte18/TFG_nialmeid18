@@ -58,7 +58,7 @@
     </build>
    <profiles>
 
-    <!-- PERFIL PARA PRUEBAS LOCALES (MAINPRUEBA) -->
+    <!-- PERFIL PARA PRUEBAS LOCALES (MainPruebaSecuencial) -->
     <profile>
         <id>prueba</id>
         <build>
@@ -68,7 +68,7 @@
                     <artifactId>exec-maven-plugin</artifactId>
                     <version>3.1.0</version>
                     <configuration>
-                        <mainClass>com.nicole.tfg.MainPrueba</mainClass>
+                        <mainClass>com.nicole.tfg.MainPruebaSecuencial</mainClass>
                     </configuration>
                 </plugin>
             </plugins>

@@ -6,14 +6,14 @@ import java.util.Map;
 // capa intermedia que coordina 
 public class GestorTransacciones {
 
-    private final Mongo7 mongo7;  // necesitamos el metodo de guardarHistórico
+    private final Mongo mongo7;  // necesitamos el metodo de guardarHistórico
     private final DatabaseClient mongo8;
     private final DatabaseClient redis;
    
 
     
 
-    public GestorTransacciones(Mongo7 mongo7,
+    public GestorTransacciones(Mongo mongo7,
                                DatabaseClient mongo8,
                                DatabaseClient redis) {
         this.mongo7 = mongo7;
@@ -21,10 +21,10 @@ public class GestorTransacciones {
         this.redis  = redis;
     }
 
-    public void abrir() throws Exception {
-        mongo7.open();
-        mongo8.open();
-        redis.open();
+    public void abrir(String uriMongo7, String uriMongo8, String uriRedis) throws Exception {
+        mongo7.open(uriMongo7);
+        mongo8.open(uriMongo8);
+        redis.open(uriRedis);
     }
 
     public void cerrar() throws Exception {

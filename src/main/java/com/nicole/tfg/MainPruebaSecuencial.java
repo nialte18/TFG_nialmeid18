@@ -11,13 +11,17 @@ public class MainPruebaSecuencial {
 
                 try {
 
-                        Mongo7 mongo7 = new Mongo7();
-                        Mongo8 mongo8 = new Mongo8();
+                        Mongo mongo7 = new Mongo();
+                        Mongo mongo8 = new Mongo();
                         Redis redis = new Redis();
                         GestorTransacciones gestor = new GestorTransacciones(mongo7, mongo8, redis);
-                        gestor.abrir();
+                        gestor.abrir(
+                                "mongodb://localhost:27017/tfg_mongo7",
+                                "mongodb://localhost:27018/tfg_mongo8",
+                                "redis://localhost:6379"
+                                );
                         // cargas de porcentaje de lecturas
-                        double[] workloads = { 0.5, 0.2, 0.0 };
+                        double[] workloads = { 0.0, 0.2, 0.5, 0.8, 1.0 };
                         // bloques en potencias de 2, es el nº  de transacciones
                         int[] bloques = { 2, 4, 8, 16, 32, 64, 128,256,512 };
                         Random random = new Random();
@@ -103,6 +107,7 @@ public class MainPruebaSecuencial {
                                                 long fin = System.nanoTime();
 
                                                 long duracion = (fin - inicio) / 1_000_000;
+
 
                                                 tiempoTotal += duracion;
 
