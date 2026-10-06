@@ -32,8 +32,8 @@ public class ServidorTransaccionesSimple {
                 Socket cliente = serverSocket.accept();
                 try (Socket socket = cliente;
                      BufferedReader in = new BufferedReader(
-                             new InputStreamReader(socket.getInputStream()));
-                     PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+                             new InputStreamReader(socket.getInputStream(), java.nio.charset.StandardCharsets.UTF_8));
+                     PrintWriter out = new PrintWriter(socket.getOutputStream(), true, java.nio.charset.StandardCharsets.UTF_8)) {
 
                     System.out.println("Cliente conectado: " + socket.getInetAddress());
 
@@ -45,42 +45,7 @@ public class ServidorTransaccionesSimple {
                         continue;
                     }
 
-                    System.out.println("Comando recibido: " + linea);
-                    String[] partes = linea.split(" ", 3);
-                    String comando = partes[0].toUpperCase();
-
-                    if ("WRITE".equals(comando)) {
-                        if (partes.length < 3) {
-                            out.println("ERROR Formato: WRITE clave valor");
-                            continue;
-                        }
-                        String clave = partes[1];
-                        String valor = partes[2];
-
-                        Transaccion txW = new Transaccion("escritura", clave, valor);
-                        gestor.ejecutarEscritura(txW,0,0);
-
-                        out.println("OK WRITE clave=" + clave);
-
-                    } else if ("READ".equals(comando)) {
-                        if (partes.length < 2) {
-                            out.println("ERROR Formato: READ clave");
-                            continue;
-                        }
-                        String clave = partes[1];
-
-                        Transaccion txR = new Transaccion("lectura", clave, null);
-                        Map<String,String> res = gestor.ejecutarLectura(txR,0,0);
-
-                        String v7 = res.get("mongo7");
-                        String v8 = res.get("mongo8");
-                        String vr = res.get("redis");
-
-                        out.println("OK READ mongo7=" + v7 + " | mongo8=" + v8 + " | redis=" + vr);
-
-                    } else {
-                        out.println("ERROR Comando no reconocido. Usa WRITE o READ.");
-                    }
+                    out.println(procesarPeticion(linea, gestor));
 
                 } catch (Exception e) {
                     // Un fallo de este cliente no termina el servidor.
@@ -99,6 +64,41 @@ public class ServidorTransaccionesSimple {
                 System.err.println(" Error al cerrar el gestor:");
                 e.printStackTrace();
             }
+        }
+    }
+    // Una peticion lleva los datos del escenario, no solo la operacion.
+    static String procesarPeticion(String linea, GestorTransacciones gestor) {
+        if (linea == null) return "ERROR Peticion vacia";
+        String[] partes = linea.trim().split("\\s+", 5);
+        if (partes.length < 4) return "ERROR Formato: READ|WRITE porcentajeLectura bloque clave [valor]";
+        String comando = partes[0].toUpperCase(java.util.Locale.ROOT);
+        if (!comando.equals("READ") && !comando.equals("WRITE")) return "ERROR Comando desconocido";
+        if ((comando.equals("READ") && partes.length != 4)
+                || (comando.equals("WRITE") && partes.length != 5)) return "ERROR Numero de argumentos incorrecto";
+        double porcentajeLectura;
+        int bloque;
+        try {
+            porcentajeLectura = Double.parseDouble(partes[1]);
+            bloque = Integer.parseInt(partes[2]);
+        } catch (NumberFormatException e) {
+            return "ERROR Porcentaje o bloque no numerico";
+        }
+        if (!Double.isFinite(porcentajeLectura) || porcentajeLectura < 0 || porcentajeLectura > 1 || bloque <= 0) {
+            return "ERROR Porcentaje fuera de [0,1] o bloque no positivo";
+        }
+        String clave = partes[3];
+        try {
+            if (comando.equals("WRITE")) {
+                gestor.ejecutarEscritura(new Transaccion("escritura", clave, partes[4]), porcentajeLectura, bloque);
+                return "OK WRITE clave=" + clave;
+            }
+            Map<String, String> res = gestor.ejecutarLectura(new Transaccion("lectura", clave, null), porcentajeLectura, bloque);
+            // Una respuesta ocupa siempre una sola linea del protocolo.
+            return ("OK READ mongo7=" + res.get("mongo7") + " | mongo8=" + res.get("mongo8")
+                    + " | redis=" + res.get("redis")).replace('\r', ' ').replace('\n', ' ');
+        } catch (Exception e) {
+            System.err.println("Error al ejecutar " + comando + ": " + e.getMessage());
+            return "ERROR No se pudo completar la operacion " + comando;
         }
     }
 }

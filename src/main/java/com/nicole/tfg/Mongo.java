@@ -68,14 +68,14 @@ public class Mongo implements DatabaseClient {
                              long tiempoInicio,
                              long tiempoFinal,
                              long duracion,
-                             double workload,
+                             double porcentajeLectura,
                              int bloque) throws Exception {
         try {
             Document historicoDoc = new Document("_id", id)
                     .append("tiempoInicio", tiempoInicio)
                     .append("tiempoFinal", tiempoFinal)
                     .append("duracionMs", duracion)
-                    .append("workload", workload)
+                    .append("porcentajeLectura", porcentajeLectura)
                     .append("bloque", bloque);
 
             collectionHistorico.insertOne(historicoDoc);
