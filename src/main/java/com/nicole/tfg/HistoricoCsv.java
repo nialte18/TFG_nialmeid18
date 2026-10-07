@@ -16,19 +16,27 @@ public class HistoricoCsv {
     }
 
     public void guardar(String id, long inicio, long fin, long duracion,
-                        double porcentajeLectura, int bloque) throws IOException {
+                        double porcentajeLectura, int bloque, Transaccion.Estado estado) throws IOException {
         Path padre = archivo.toAbsolutePath().getParent();
         Files.createDirectories(padre);
         boolean cabecera = !Files.exists(archivo) || Files.size(archivo) == 0;
+        String columnas = "id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque,estado";
+        if (!cabecera) {
+            try (var reader = Files.newBufferedReader(archivo, StandardCharsets.UTF_8)) {
+                if (!columnas.equals(reader.readLine())) {
+                    throw new IOException("Cabecera CSV incompatible: " + archivo.toAbsolutePath());
+                }
+            }
+        }
         try (BufferedWriter writer = Files.newBufferedWriter(archivo, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
             if (cabecera) {
-                writer.write("id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque");
+                writer.write(columnas);
                 writer.newLine();
             }
-            // Escapar texto conforme al formato CSV. El resto son numeros.
+            // Escapar texto conforme al formato CSV
             writer.write("\"" + id.replace("\"", "\"\"") + "\"," + inicio + "," + fin + ","
-                    + duracion + "," + porcentajeLectura + "," + bloque);
+                    + duracion + "," + porcentajeLectura + "," + bloque + "," + estado.name());
             writer.newLine();
         } catch (IOException e) {
             throw new IOException("No se pudo guardar el historico CSV en " + archivo.toAbsolutePath(), e);

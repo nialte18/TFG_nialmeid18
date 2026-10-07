@@ -64,7 +64,7 @@ public class MongoTest extends TestCase {
         Mongo mongo = new Mongo();
         MongoException causa = new MongoException("Fallo simulado");
         simularFallo(mongo, "collectionHistorico", MongoCollection.class, causa);
-        comprobarFallo(() -> mongo.guardarHistorico("id", 0, 1, 1, 0.5, 2),
+        comprobarFallo(() -> mongo.guardarHistorico("id", 0, 1, 1, 0.5, 2, Transaccion.Estado.FINALIZADA),
                 "No se pudo guardar el historico en Mongo", causa);
     }
 

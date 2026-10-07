@@ -63,7 +63,7 @@ Se muestran en consola los recuentos, el tiempo total medido, la latencia media 
 
 ## Histórico y errores
 
-El gestor registra las operaciones que alcanzan ese paso en la colección `historico` de `tfg_mongo7`, con ID, tiempos de inicio y fin, duración, `porcentajeLectura` (proporcion entre 0 y 1) y tamaño de bloque. No es un registro completo de fallos: una excepción anterior impide llegar al guardado. El servidor utiliza la proporcion de lecturas y el bloque recibidos del cliente. Los documentos nuevos usan `porcentajeLectura`; los antiguos conservan `workload` y no se migran automaticamente. El porcentaje de escrituras se calcula como `1 - porcentajeLectura`.
+El gestor registra las operaciones que alcanzan ese paso en la colección `historico` de `tfg_mongo7`, con ID, tiempos de inicio y fin, duración, `porcentajeLectura` (proporcion entre 0 y 1) y tamaño de bloque. El gestor intenta registrar tanto las operaciones finalizadas como las abortadas. Si falla el propio destino de registro, no se garantiza que quede guardado. El servidor utiliza la proporcion de lecturas y el bloque recibidos del cliente. Los documentos nuevos usan `porcentajeLectura`; los antiguos conservan `workload` y no se migran automaticamente. El porcentaje de escrituras se calcula como `1 - porcentajeLectura`.
 
 Mongo y Redis capturan errores de sus bibliotecas, añaden un mensaje sobre la operación y propagan la excepción conservando su causa. El servidor captura fallos al atender a un cliente y continúa con el siguiente.
 
@@ -71,12 +71,12 @@ Este tratamiento no implementa rollback ni garantiza atomicidad entre las tres b
 
 ## Historico CSV (ademas de MongoDB)
 
-El gestor intenta guardar cada registro tanto en MongoDB 7 como en `resultados/historico_transacciones.csv`. La ruta es relativa al directorio desde el que se inicia el servidor; usando los comandos de este README desde la raiz, queda dentro del proyecto.
+El gestor intenta guardar cada registro tanto en MongoDB 7 como en `resultados/historico_transacciones_estados.csv`. La ruta es relativa al directorio desde el que se inicia el servidor; usando los comandos de este README desde la raiz, queda dentro del proyecto.
 
 La carpeta y el archivo se crean al guardar la primera transaccion. El CSV utiliza UTF-8 y comas como separadores, con estas columnas:
 
 ```csv
-id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque
+id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque,estado
 ```
 
 Los tiempos de inicio y fin son milisegundos desde la epoca Unix. `porcentajeLectura` es una proporcion entre 0 y 1 (0.2 significa 20 %). Son los mismos valores enviados al historico de Mongo; el ID corresponde a `_id` en Mongo. La duracion interna se mide antes de guardar en ambos destinos. No contiene los 45 resumenes del cliente.
@@ -85,7 +85,7 @@ Cada registro se anade sin borrar filas anteriores; la cabecera solo se escribe 
 
 En Excel, importar mediante Datos > Desde texto/CSV, seleccionando UTF-8, delimitador coma y punto como separador decimal para `porcentajeLectura` si la configuracion regional lo requiere. El archivo es CSV, no un libro `.xlsx`. La carpeta `resultados/` se excluye de Git para no subir datos generados automaticamente.
 
-Si falla un destino se intenta el otro y se comunica el error; no hay atomicidad entre el archivo y Mongo. Puede existir un registro en un destino y no en el otro. Si falla una operacion de datos antes de alcanzar el registro del historico, no se registra en ninguno de los dos.
+Si falla un destino se intenta el otro y se comunica el error; no hay atomicidad entre el archivo y Mongo. Puede existir un registro en un destino y no en el otro. Si falla una operacion de datos, se intenta registrar ABORTADA en ambos destinos y se propaga el error original.
 
 ## CSV de resumenes para las graficas
 
@@ -99,7 +99,7 @@ Incluye proporciones nominales, bloque, lecturas/escrituras realmente enviadas, 
 
 Para preparar las graficas en Excel: Datos > Desde texto/CSV, elegir este archivo, delimitador coma, UTF-8 y configuracion regional con punto decimal. Crear una tabla por metrica con bloques en filas y proporciones de lectura en columnas; insertar un grafico de lineas. No se necesita interpretar el log de consola ni ejecutar Python. El libro Excel entregado contiene una copia de un CSV concreto; no se actualiza automaticamente al ejecutar Java otra vez.
 
-Este archivo es distinto de `historico_transacciones.csv`, que sigue acumulando las duraciones internas del gestor. No deben mezclarse ambas medidas. Los resultados de una sola ejecucion son preliminares, sin estimacion de variabilidad. En estas graficas varia el bloque secuencial; en el TFG de Conrad se estudian tambien clientes concurrentes.
+Este archivo es distinto de `historico_transacciones_estados.csv`, que sigue acumulando las duraciones internas del gestor. No deben mezclarse ambas medidas. Los resultados de una sola ejecucion son preliminares, sin estimacion de variabilidad. En estas graficas varia el bloque secuencial; en el TFG de Conrad se estudian tambien clientes concurrentes.
 
 ## Pruebas automáticas
 
@@ -115,3 +115,11 @@ Hay pruebas de Mongo, Redis y del recorrido de los experimentos. Se comprueban l
 - Ejecutar los nuevos escenarios de 80 % y 100 % de lecturas y revisar los resultados.
 - Preparar las gráficas cuando quede aclarado el diseño experimental.
 - Abordar la concurrencia después de validar la fase secuencial.
+
+## Estado de las transacciones
+
+El gestor actualiza cada transaccion de INICIADA a FINALIZADA cuando completa las operaciones de lectura o escritura en las tres bases, o a ABORTADA si la validacion de la operacion o su ejecucion falla. En ambos casos asigna t_final e intenta registrar el resultado en Mongo y CSV. Una transaccion terminada no se puede volver a ejecutar con el mismo objeto.
+
+ABORTADA no implica rollback: puede haber escrituras parciales. Si las operaciones terminan pero falla el historico, el estado sigue siendo FINALIZADA y se propaga el error de persistencia; el servidor responde ERROR y el cliente cuenta el intento como fallido. El estado de las operaciones y el exito de la peticion completa son medidas diferentes. Si fallan operacion e historico, se conserva la excepcion de la operacion y se adjunta la del historico.
+
+Los registros nuevos incluyen estado. Se usa historico_transacciones_estados.csv para no mezclar las siete columnas nuevas con las seis del antiguo historico_transacciones.csv, que se conserva sin modificar. Tampoco se modifica el historico antiguo de Mongo. El escritor rechaza cabeceras incompatibles. El CSV de resumenes del cliente mantiene su formato.
