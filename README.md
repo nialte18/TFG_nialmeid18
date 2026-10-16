@@ -120,22 +120,8 @@ Incluye los campos anteriores de resumen y añade `concurrencia`, `abortadasColi
 - Latencia media: suma de tiempos desde conexión hasta respuesta (o error), dividida entre todos los intentos. Incluye abortos y errores, no solo éxitos; excluye la espera previa en la cola del cliente.
 - Throughput: respuestas correctas divididas entre segundos del bloque.
 
-No se debe comparar una reducción de latencia como una mejora por sí sola: rechazar peticiones rápidamente puede bajar la media sin aumentar el trabajo completado. Las comparaciones deben incluir los abortos y errores.
-
-Para abrir el CSV en Excel: Datos > Desde texto/CSV, UTF-8 y delimitador coma. En Transformar datos, convertir los decimales con configuración regional Inglés (Estados Unidos). Usar bloques en filas y proporciones de lectura en columnas; excluir Total general de las gráficas y etiquetar ejes y unidades. Guardar el libro con gráficas como .xlsx.
-
 ## Pruebas
 
 ```bash
 mvn test
 ```
-
-Las pruebas no requieren bases activas. Incluyen colisiones simultáneas, lecturas y escrituras sobre claves distintas, intercambio por sockets, liberación del control tras un error, filas CSV concurrentes, los 45 resúmenes y separación entre colisiones y errores.
-
-Las pruebas con bases reales son una comprobación adicional; una ejecución no permite sacar conclusiones estadísticas. Los resultados secuenciales anteriores se conservan como referencia, pero los experimentos comparativos requieren condiciones controladas y repeticiones.
-
-## Referencias y siguiente fase
-
-Se utiliza el TFG de Conrad como referencia general y el TFG de Pablo para estudiar concurrencia, registro y el autómata de la página 35. La regla temporal de esta fase es la simplificación indicada por la tutora; no reproduce el criterio de Pablo para escrituras sobre las mismas cuentas.
-
-Quedan para después los niveles de consistencia de lectura y escritura, con las indicaciones de la tutora. No se han implementado en esta rama.
