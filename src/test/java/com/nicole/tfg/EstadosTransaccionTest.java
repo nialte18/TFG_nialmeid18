@@ -26,7 +26,7 @@ public class EstadosTransaccionTest extends TestCase {
         }
         public String read(String k) throws Exception { write(k, null); return "v"; }
         public void guardarHistorico(String id, long i, long f, long d, double p, int b,
-                                     Transaccion.Estado estado) throws Exception {
+                                     Transaccion.Estado estado, Transaccion.MotivoAborto motivo) throws Exception {
             if (falloHistorico != null) throw falloHistorico;
             registrado = estado;
             fin = f;
@@ -64,7 +64,7 @@ public class EstadosTransaccionTest extends TestCase {
             assertNotNull(tx.getTFinal());
         }
         assertEquals(0, tercera.operaciones);
-        assertTrue(Files.readAllLines(archivo).get(2).endsWith(",ABORTADA"));
+        assertTrue(Files.readAllLines(archivo).get(2).endsWith(",ABORTADA,ERROR_OPERACION"));
     }
     public void testFalloHistoricoNoCambiaResultadoYConservaErrorOriginal() throws Exception {
         Base base = new Base();
@@ -83,8 +83,8 @@ public class EstadosTransaccionTest extends TestCase {
             assertSame(base.falloHistorico, e.getSuppressed()[0]);
         }
         assertEquals(Transaccion.Estado.ABORTADA, abortada.getEstado());
-        assertTrue(Files.readAllLines(archivo).get(1).endsWith(",FINALIZADA"));
-        assertTrue(Files.readAllLines(archivo).get(2).endsWith(",ABORTADA"));
+        assertTrue(Files.readAllLines(archivo).get(1).endsWith(",FINALIZADA,NINGUNO"));
+        assertTrue(Files.readAllLines(archivo).get(2).endsWith(",ABORTADA,ERROR_OPERACION"));
     }
     public void testNoReejecutaTransaccionTerminada() throws Exception {
         Base base = new Base();
@@ -101,7 +101,7 @@ public class EstadosTransaccionTest extends TestCase {
         String antiguo = "id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque\n";
         Files.writeString(archivo, antiguo);
         try {
-            new HistoricoCsv(archivo).guardar("id", 0, 1, 1, 0, 2, Transaccion.Estado.FINALIZADA);
+            new HistoricoCsv(archivo).guardar("id", 0, 1, 1, 0, 2, Transaccion.Estado.FINALIZADA, Transaccion.MotivoAborto.NINGUNO);
             fail();
         } catch (java.io.IOException esperado) { }
         assertEquals(antiguo, Files.readString(archivo));

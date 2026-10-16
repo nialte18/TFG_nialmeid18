@@ -17,10 +17,10 @@ public class ResumenExperimentosCsv implements Closeable {
     public ResumenExperimentosCsv(Path directorio) throws IOException {
         Files.createDirectories(directorio);
         String fecha = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        ruta = Files.createTempFile(directorio, "resumen_experimentos_" + fecha + "_", ".csv");
+        ruta = Files.createTempFile(directorio, "resumen_concurrente_" + fecha + "_", ".csv");
         writer = Files.newBufferedWriter(ruta, StandardCharsets.UTF_8);
         try {
-            writer.write("proporcionLecturas,proporcionEscrituras,bloque,lecturas,escrituras,correctas,fallidas,tiempoTotalNs,tiempoPeticionesNs,tiempoTotalMs,latenciaMediaMs,throughputPeticionesSegundo");
+            writer.write("proporcionLecturas,proporcionEscrituras,bloque,lecturas,escrituras,correctas,fallidas,tiempoTotalNs,tiempoPeticionesNs,tiempoTotalMs,latenciaMediaMs,throughputPeticionesSegundo,concurrencia,abortadasColision,errores");
             writer.newLine();
             writer.flush();
         } catch (IOException e) {
@@ -32,12 +32,14 @@ public class ResumenExperimentosCsv implements Closeable {
     public Path getRuta() { return ruta; }
 
     public void guardar(double proporcionLecturas, int bloque, int lecturas, int correctas,
-                        int fallidas, long tiempoTotalNs, long tiempoPeticionesNs) throws IOException {
+                        int fallidas, long tiempoTotalNs, long tiempoPeticionesNs,
+                        int concurrencia, int abortadasColision, int errores) throws IOException {
         double throughput = tiempoTotalNs > 0 ? correctas * 1_000_000_000.0 / tiempoTotalNs : 0;
         writer.write(proporcionLecturas + "," + (1 - proporcionLecturas) + "," + bloque + ","
                 + lecturas + "," + (bloque - lecturas) + "," + correctas + "," + fallidas + ","
                 + tiempoTotalNs + "," + tiempoPeticionesNs + "," + tiempoTotalNs / 1_000_000.0 + ","
-                + tiempoPeticionesNs / 1_000_000.0 / bloque + "," + throughput);
+                + tiempoPeticionesNs / 1_000_000.0 / bloque + "," + throughput + ","
+                + concurrencia + "," + abortadasColision + "," + errores);
         writer.newLine();
         writer.flush();
     }

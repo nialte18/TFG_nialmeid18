@@ -16,13 +16,13 @@ public class HistoricoCsvTest extends TestCase {
         Files.deleteIfExists(directorio);
     }
     public void testAnadeFilasYUnaSolaCabecera() throws Exception {
-        new HistoricoCsv(archivo).guardar("id,\"uno\"", 10, 20, 10, 0.2, 8, Transaccion.Estado.FINALIZADA);
-        new HistoricoCsv(archivo).guardar("dos", 20, 30, 10, 0.8, 16, Transaccion.Estado.ABORTADA);
+        new HistoricoCsv(archivo).guardar("id,\"uno\"", 10, 20, 10, 0.2, 8, Transaccion.Estado.FINALIZADA, Transaccion.MotivoAborto.NINGUNO);
+        new HistoricoCsv(archivo).guardar("dos", 20, 30, 10, 0.8, 16, Transaccion.Estado.ABORTADA, Transaccion.MotivoAborto.ERROR_OPERACION);
         List<String> filas = Files.readAllLines(archivo);
         assertEquals(3, filas.size());
-        assertEquals("id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque,estado", filas.get(0));
-        assertEquals("\"id,\"\"uno\"\"\",10,20,10,0.2,8,FINALIZADA", filas.get(1));
-        assertEquals("\"dos\",20,30,10,0.8,16,ABORTADA", filas.get(2));
+        assertEquals("id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque,estado,motivoAborto", filas.get(0));
+        assertEquals("\"id,\"\"uno\"\"\",10,20,10,0.2,8,FINALIZADA,NINGUNO", filas.get(1));
+        assertEquals("\"dos\",20,30,10,0.8,16,ABORTADA,ERROR_OPERACION", filas.get(2));
     }
     private static class MongoSimulado extends Mongo {
         boolean fallar;
@@ -31,7 +31,7 @@ public class HistoricoCsvTest extends TestCase {
         int bloque;
         @Override public void write(String k, String v) {}
         @Override public String read(String k) { return "valor"; }
-        @Override public void guardarHistorico(String id, long i, long f, long d, double p, int b, Transaccion.Estado estado) throws Exception {
+        @Override public void guardarHistorico(String id, long i, long f, long d, double p, int b, Transaccion.Estado estado, Transaccion.MotivoAborto motivo) throws Exception {
             if (fallar) throw new Exception("Fallo Mongo simulado");
             this.id = id; proporcion = p; bloque = b;
         }
@@ -47,7 +47,7 @@ public class HistoricoCsvTest extends TestCase {
         assertTrue(Files.readAllLines(archivo).get(1).startsWith("\"" + mongo.id + "\","));
         gestor.ejecutarLectura(new Transaccion("lectura", "c", null), 1.0, 4);
         assertEquals(3, Files.readAllLines(archivo).size());
-        assertTrue(Files.readAllLines(archivo).get(2).endsWith(",1.0,4,FINALIZADA"));
+        assertTrue(Files.readAllLines(archivo).get(2).endsWith(",1.0,4,FINALIZADA,NINGUNO"));
     }
     public void testCsvSeIntentaAunqueFalleMongo() throws Exception {
         MongoSimulado mongo = new MongoSimulado();

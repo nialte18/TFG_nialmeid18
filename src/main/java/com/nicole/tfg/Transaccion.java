@@ -8,7 +8,7 @@ public class Transaccion {
     private final String operacion;   // "lectura" o "escritura"
     private final String clave;       
     private final String valor;       // value (puede ser null en lecturas)
-    private final Timestamp t_inicial;
+    private Timestamp t_inicial;
     private  Timestamp t_final;
     // estados de las transacciones
     public enum Estado{
@@ -17,6 +17,8 @@ public class Transaccion {
         ABORTADA
     }
     private Estado estado;
+    public enum MotivoAborto { NINGUNO, COLISION_TEMPORAL, ERROR_OPERACION }
+    private MotivoAborto motivoAborto = MotivoAborto.NINGUNO;
 
     public Transaccion(String operacion, String clave, String valor) {
         // id e instante se crean automaticamente 
@@ -36,6 +38,10 @@ public class Transaccion {
     public Timestamp getTInicial() { return t_inicial; }
     public Timestamp getTFinal() { return t_final; }
     public Estado getEstado() { return estado; }
+    public MotivoAborto getMotivoAborto() { return motivoAborto; }
+
+    void setTInicial(Timestamp inicio) { this.t_inicial = inicio; }
+    public void setMotivoAborto(MotivoAborto motivo) { this.motivoAborto = motivo; }
 
     public void setTFinal(Timestamp t_final) {
         this.t_final = t_final;

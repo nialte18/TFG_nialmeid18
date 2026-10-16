@@ -1,0 +1,7 @@
+Validacion 12/10/2026, rama version-concurrente.
+28 pruebas automaticas superadas.
+Concurrencia 4: 45 resumenes, 5110 intentos, 4974 correctas, 136 colisiones, 0 otros errores.
+Concurrencia 1: 45 resumenes, 5110 intentos, 5110 correctas, 0 colisiones, 0 otros errores.
+10220 registros CSV contrastados por ID y campos con Mongo. Recuentos por escenario coinciden con cliente.
+Son ejecuciones de validacion; no una comparacion estadistica de rendimiento.
+Los tiempos de admision/finalizacion del historico tienen precision de milisegundos.

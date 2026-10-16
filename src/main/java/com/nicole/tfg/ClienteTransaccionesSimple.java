@@ -6,6 +6,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.*;
 
 public class ClienteTransaccionesSimple {
     private static final double[] WORKLOADS = {0.0, 0.2, 0.5, 0.8, 1.0};
@@ -13,9 +14,11 @@ public class ClienteTransaccionesSimple {
     private static final String[] CLAVES = {"cuenta1", "cuenta2", "cuenta3", "cuenta4"};
 
     public static void main(String[] args) throws IOException {
+        int concurrencia = args.length == 0 ? 4 : Integer.parseInt(args[0]);
+        if (concurrencia < 1 || concurrencia > 64) throw new IllegalArgumentException("Concurrencia entre 1 y 64");
         try (ResumenExperimentosCsv resumen = new ResumenExperimentosCsv(Path.of("resultados"))) {
             System.out.println("CSV de esta ejecucion: " + resumen.getRuta().toAbsolutePath());
-            ejecutarExperimentos(comando -> enviarPeticion("localhost", 5000, comando), System.out, resumen);
+            ejecutarExperimentos(comando -> enviarPeticion("localhost", 5000, comando), System.out, resumen, concurrencia);
         }
     }
 
@@ -36,61 +39,108 @@ public class ClienteTransaccionesSimple {
 
     static void ejecutarExperimentos(Envio envio, PrintStream salida) {
         try {
-            ejecutarExperimentos(envio, salida, null);
+            ejecutarExperimentos(envio, salida, null, 1);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     static void ejecutarExperimentos(Envio envio, PrintStream salida, ResumenExperimentosCsv resumen) throws IOException {
+        ejecutarExperimentos(envio, salida, resumen, 1);
+    }
+
+    static void ejecutarExperimentos(Envio envio, PrintStream salida, ResumenExperimentosCsv resumen,
+                                     int concurrencia) throws IOException {
+        if (concurrencia < 1 || concurrencia > 64) {
+            throw new IllegalArgumentException("La concurrencia debe estar entre 1 y 64");
+        }
         Random random = new Random();
-        for (double porcentajeLectura : WORKLOADS) {
-            for (int bloque : BLOQUES) {
-                List<String> operaciones = prepararOperaciones(porcentajeLectura, bloque, random);
-                int lecturas = Collections.frequency(operaciones, "READ");
-                int correctas = 0;
-                int fallidas = 0;
-                long tiempoPeticiones = 0;
-                long inicioBloque = System.nanoTime();
-                for (int i = 0; i < operaciones.size(); i++) {
-                    String tipo = operaciones.get(i);
-                    String clave = CLAVES[random.nextInt(CLAVES.length)];
-                    // Formato: operacion proporcionLecturas bloque clave [valor].
-                    String comando = tipo + " " + porcentajeLectura + " " + bloque + " " + clave;
-                    if (tipo.equals("WRITE")) comando += " valor_" + i;
-                    long inicio = System.nanoTime();
-                    try {
-                        String respuesta = envio.enviar(comando);
-                        if (respuesta != null && respuesta.startsWith("OK " + tipo + " ")) {
-                            correctas++;
-                        } else {
-                            fallidas++;
-                            salida.println("Peticion fallida: " + respuesta);
-                        }
-                    } catch (IOException e) {
-                        fallidas++;
-                        salida.println("Fallo de comunicacion: " + e.getMessage());
+        try (ExecutorService hilos = Executors.newFixedThreadPool(concurrencia)) {
+            for (double porcentajeLectura : WORKLOADS) {
+                for (int bloque : BLOQUES) {
+                    List<String> operaciones = prepararOperaciones(porcentajeLectura, bloque, random);
+                    List<String> comandos = new ArrayList<>();
+                    for (int i = 0; i < bloque; i++) {
+                        String tipo = operaciones.get(i);
+                        String clave = CLAVES[random.nextInt(CLAVES.length)];
+                        String comando = tipo + " " + porcentajeLectura + " " + bloque + " " + clave;
+                        if (tipo.equals("WRITE")) comando += " valor_" + i;
+                        comandos.add(comando);
                     }
-                    tiempoPeticiones += System.nanoTime() - inicio;
+                    int lecturas = Collections.frequency(operaciones, "READ");
+                    int correctas = 0, abortadas = 0, errores = 0;
+                    long tiempoPeticiones = 0;
+                    List<Future<ResultadoPeticion>> tareas = new ArrayList<>();
+                    CountDownLatch salidaBloque = new CountDownLatch(1);
+                    long inicioBloque = System.nanoTime();
+                    for (String comando : comandos) {
+                        tareas.add(hilos.submit(() -> {
+                            salidaBloque.await();
+                            return ejecutarPeticion(envio, comando);
+                        }));
+                    }
+                    salidaBloque.countDown();
+                    for (Future<ResultadoPeticion> tarea : tareas) {
+                        try {
+                            ResultadoPeticion resultado = tarea.get();
+                            tiempoPeticiones += resultado.duracionNs;
+                            if (resultado.correcta) correctas++;
+                            else if (resultado.colision) abortadas++;
+                            else {
+                                errores++;
+                                salida.println("Peticion fallida: " + resultado.respuesta);
+                            }
+                        } catch (InterruptedException e) {
+                            hilos.shutdownNow();
+                            Thread.currentThread().interrupt();
+                            throw new IOException("Experimento interrumpido; el CSV puede estar incompleto", e);
+                        } catch (ExecutionException e) {
+                            hilos.shutdownNow();
+                            throw new IOException("Fallo inesperado en una tarea del cliente", e.getCause());
+                        }
+                    }
+                    long duracionBloque = System.nanoTime() - inicioBloque;
+                    int fallidas = abortadas + errores;
+                    if (resumen != null) {
+                        resumen.guardar(porcentajeLectura, bloque, lecturas, correctas, fallidas,
+                                duracionBloque, tiempoPeticiones, concurrencia, abortadas, errores);
+                    }
+                    salida.printf(Locale.ROOT,
+                            "%nRESULTADOS: lecturas %.0f%% / escrituras %.0f%% | bloque %d | concurrencia %d%n",
+                            porcentajeLectura * 100, (1 - porcentajeLectura) * 100, bloque, concurrencia);
+                    salida.println("Lecturas enviadas: " + lecturas + " | Escrituras enviadas: " + (bloque - lecturas));
+                    salida.println("Correctas: " + correctas + " | Fallidas: " + fallidas);
+                    salida.println("Abortadas por colision: " + abortadas + " | Otros errores: " + errores);
+                    salida.printf(Locale.ROOT, "Tiempo total del bloque: %.3f ms%n", duracionBloque / 1e6);
+                    salida.printf(Locale.ROOT, "Latencia media por intento: %.3f ms%n", tiempoPeticiones / 1e6 / bloque);
+                    salida.printf(Locale.ROOT, "Throughput: %.3f peticiones correctas/segundo%n",
+                            duracionBloque > 0 ? correctas * 1e9 / duracionBloque : 0);
                 }
-                long duracionBloque = System.nanoTime() - inicioBloque;
-                // Guardar fuera del intervalo medido para no incluir la escritura de este CSV.
-                if (resumen != null) {
-                    resumen.guardar(porcentajeLectura, bloque, lecturas, correctas, fallidas,
-                            duracionBloque, tiempoPeticiones);
-                }
-                salida.printf(Locale.ROOT,
-                        "%nRESULTADOS: lecturas %.0f%% / escrituras %.0f%% | bloque %d%n",
-                        porcentajeLectura * 100, (1 - porcentajeLectura) * 100, bloque);
-                salida.println("Lecturas enviadas: " + lecturas + " | Escrituras enviadas: " + (bloque - lecturas));
-                salida.println("Correctas: " + correctas + " | Fallidas: " + fallidas);
-                salida.printf(Locale.ROOT, "Tiempo total del bloque: %.3f ms%n", duracionBloque / 1_000_000.0);
-                salida.printf(Locale.ROOT, "Latencia media por intento (conexion y respuesta incluidas): %.3f ms%n",
-                        tiempoPeticiones / 1_000_000.0 / bloque);
-                salida.printf(Locale.ROOT, "Throughput: %.3f peticiones correctas/segundo%n",
-                        duracionBloque > 0 ? correctas * 1_000_000_000.0 / duracionBloque : 0);
             }
         }
+    }
+
+    // Cada hilo devuelve su resultado; los contadores se actualizan en el hilo principal.
+    private static class ResultadoPeticion {
+        long duracionNs;
+        String respuesta;
+        boolean correcta;
+        boolean colision;
+    }
+
+    private static ResultadoPeticion ejecutarPeticion(Envio envio, String comando) {
+        ResultadoPeticion resultado = new ResultadoPeticion();
+        String tipo = comando.startsWith("READ ") ? "READ" : "WRITE";
+        long inicio = System.nanoTime();
+        try {
+            resultado.respuesta = envio.enviar(comando);
+            resultado.correcta = resultado.respuesta != null && resultado.respuesta.startsWith("OK " + tipo + " ");
+            resultado.colision = "ABORTADA COLISION_TEMPORAL".equals(resultado.respuesta);
+        } catch (IOException e) {
+            resultado.respuesta = "Error de comunicacion: " + e.getMessage();
+        }
+        resultado.duracionNs = System.nanoTime() - inicio;
+        return resultado;
     }
 
     static String enviarPeticion(String host, int puerto, String comando) throws IOException {

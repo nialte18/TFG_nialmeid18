@@ -1,7 +1,6 @@
 package com.nicole.tfg;
 
 import java.nio.file.Path;
-import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -10,10 +9,11 @@ public class GestorTransacciones {
     private final DatabaseClient mongo8;
     private final DatabaseClient redis;
     private final HistoricoCsv historicoCsv;
+    private final ControlConcurrencia control = new ControlConcurrencia();
 
     public GestorTransacciones(Mongo mongo7, DatabaseClient mongo8, DatabaseClient redis) {
         this(mongo7, mongo8, redis,
-                new HistoricoCsv(Path.of("resultados", "historico_transacciones_estados.csv")));
+                new HistoricoCsv(Path.of("resultados", "historico_transacciones_concurrentes.csv")));
     }
 
     GestorTransacciones(Mongo mongo7, DatabaseClient mongo8, DatabaseClient redis, HistoricoCsv historicoCsv) {
@@ -36,8 +36,10 @@ public class GestorTransacciones {
     }
 
     public void ejecutarEscritura(Transaccion tx, double porcentajeLectura, int bloque) throws Exception {
-        comprobarIniciada(tx);
-        long inicio = System.currentTimeMillis();
+        if (!control.intentarIniciar(tx)) {
+            registrarResultado(tx, porcentajeLectura, bloque, null);
+            return;
+        }
         Exception fallo = null;
         try {
             if (!"escritura".equalsIgnoreCase(tx.getOperacion())) {
@@ -49,14 +51,19 @@ public class GestorTransacciones {
             tx.setEstado(Transaccion.Estado.FINALIZADA);
         } catch (Exception e) {
             tx.setEstado(Transaccion.Estado.ABORTADA);
+            tx.setMotivoAborto(Transaccion.MotivoAborto.ERROR_OPERACION);
             fallo = e;
+        } finally {
+            control.finalizar(tx);
         }
-        registrarResultado(tx, inicio, porcentajeLectura, bloque, fallo);
+        registrarResultado(tx, porcentajeLectura, bloque, fallo);
     }
 
     public Map<String, String> ejecutarLectura(Transaccion tx, double porcentajeLectura, int bloque) throws Exception {
-        comprobarIniciada(tx);
-        long inicio = System.currentTimeMillis();
+        if (!control.intentarIniciar(tx)) {
+            registrarResultado(tx, porcentajeLectura, bloque, null);
+            return Map.of();
+        }
         Exception fallo = null;
         Map<String, String> resultado = new HashMap<>();
         try {
@@ -69,22 +76,19 @@ public class GestorTransacciones {
             tx.setEstado(Transaccion.Estado.FINALIZADA);
         } catch (Exception e) {
             tx.setEstado(Transaccion.Estado.ABORTADA);
+            tx.setMotivoAborto(Transaccion.MotivoAborto.ERROR_OPERACION);
             fallo = e;
+        } finally {
+            control.finalizar(tx);
         }
-        registrarResultado(tx, inicio, porcentajeLectura, bloque, fallo);
+        registrarResultado(tx, porcentajeLectura, bloque, fallo);
         return resultado;
     }
 
-    private void comprobarIniciada(Transaccion tx) {
-        if (tx.getEstado() != Transaccion.Estado.INICIADA) {
-            throw new IllegalStateException("La transaccion ya ha terminado");
-        }
-    }
-
-    private void registrarResultado(Transaccion tx, long inicio, double porcentajeLectura,
+    private void registrarResultado(Transaccion tx, double porcentajeLectura,
                                     int bloque, Exception falloOperacion) throws Exception {
-        long fin = System.currentTimeMillis();
-        tx.setTFinal(new Timestamp(fin));
+        long inicio = tx.getTInicial().getTime();
+        long fin = tx.getTFinal().getTime();
         // El estado describe las operaciones; un fallo del historico no las deshace.
         try {
             guardarHistorico(tx, inicio, fin, porcentajeLectura, bloque);
@@ -99,12 +103,12 @@ public class GestorTransacciones {
                                   double porcentajeLectura, int bloque) throws Exception {
         Exception fallo = null;
         try {
-            mongo7.guardarHistorico(tx.getId(), inicio, fin, fin - inicio, porcentajeLectura, bloque, tx.getEstado());
+            mongo7.guardarHistorico(tx.getId(), inicio, fin, fin - inicio, porcentajeLectura, bloque, tx.getEstado(), tx.getMotivoAborto());
         } catch (Exception e) {
             fallo = e;
         }
         try {
-            historicoCsv.guardar(tx.getId(), inicio, fin, fin - inicio, porcentajeLectura, bloque, tx.getEstado());
+            historicoCsv.guardar(tx.getId(), inicio, fin, fin - inicio, porcentajeLectura, bloque, tx.getEstado(), tx.getMotivoAborto());
         } catch (Exception e) {
             if (fallo == null) fallo = e;
             else fallo.addSuppressed(e);

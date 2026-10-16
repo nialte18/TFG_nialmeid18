@@ -7,7 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
-/** Historico de transacciones para la ejecucion secuencial del servidor. */
+/** El servidor comparte una instancia para escribir filas completas, una cada vez. */
 public class HistoricoCsv {
     private final Path archivo;
 
@@ -15,12 +15,13 @@ public class HistoricoCsv {
         this.archivo = archivo;
     }
 
-    public void guardar(String id, long inicio, long fin, long duracion,
-                        double porcentajeLectura, int bloque, Transaccion.Estado estado) throws IOException {
+    public synchronized void guardar(String id, long inicio, long fin, long duracion,
+                        double porcentajeLectura, int bloque, Transaccion.Estado estado,
+                        Transaccion.MotivoAborto motivo) throws IOException {
         Path padre = archivo.toAbsolutePath().getParent();
         Files.createDirectories(padre);
         boolean cabecera = !Files.exists(archivo) || Files.size(archivo) == 0;
-        String columnas = "id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque,estado";
+        String columnas = "id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque,estado,motivoAborto";
         if (!cabecera) {
             try (var reader = Files.newBufferedReader(archivo, StandardCharsets.UTF_8)) {
                 if (!columnas.equals(reader.readLine())) {
@@ -36,7 +37,7 @@ public class HistoricoCsv {
             }
             // Escapar texto conforme al formato CSV
             writer.write("\"" + id.replace("\"", "\"\"") + "\"," + inicio + "," + fin + ","
-                    + duracion + "," + porcentajeLectura + "," + bloque + "," + estado.name());
+                    + duracion + "," + porcentajeLectura + "," + bloque + "," + estado.name() + "," + motivo.name());
             writer.newLine();
         } catch (IOException e) {
             throw new IOException("No se pudo guardar el historico CSV en " + archivo.toAbsolutePath(), e);

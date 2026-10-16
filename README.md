@@ -2,28 +2,29 @@
 
 Proyecto desarrollado por Nicole Almeida Terán.
 
-Implementación en Java de lecturas y escrituras sobre MongoDB y Redis. El proyecto está en fase **secuencial**; la concurrencia se abordará más adelante. El trabajo de referencia se denomina «TFG de Conrad» en el seguimiento del proyecto.
+## Versión concurrente
 
-## Requisitos y conexiones
+Esta rama, `version-concurrente`, parte de la versión secuencial conservada en `correcciones-secuencial`. El recorrido sigue siendo:
 
-- JDK 21 y Maven.
-- Para ejecutar los programas, MongoDB y Redis deben estar activos, por ejemplo en sus contenedores Docker.
+`ClienteTransaccionesSimple → ServidorTransaccionesSimple → GestorTransacciones → Mongo7, Mongo8 y Redis`.
 
-| Servicio | URI utilizada |
+El cliente puede enviar varias peticiones sin esperar a que termine la anterior y el servidor las atiende mediante hilos. Se aplica la regla indicada por la tutora: cualquier transacción que intente empezar mientras otra está activa aborta, independientemente de las claves y de si son lecturas o escrituras.
+
+Por tanto, hay peticiones concurrentes, pero solo una transacción admitida ejecuta operaciones de datos cada vez. No hay reintentos automáticos, niveles de consistencia configurables ni rollback.
+
+## Requisitos y ejecución
+
+JDK 21, Maven y las tres bases activas:
+
+| Servicio | URI |
 |---|---|
 | MongoDB 7 | `mongodb://localhost:27017/tfg_mongo7` |
 | MongoDB 8 | `mongodb://localhost:27018/tfg_mongo8` |
-| Redis 7 | `redis://localhost:6379` |
+| Redis | `redis://localhost:6379` |
 
-Una única clase `Mongo` tiene dos instancias independientes. Tanto `Mongo` como `Redis` implementan `DatabaseClient` y reciben la dirección en `open(String uri)`. Mongo obtiene también el nombre de la base desde la URI.
+Las conexiones se abren una vez, antes de aceptar peticiones. Hay dos instancias de la clase Mongo y un pool de Redis; cada operación obtiene y devuelve su propia conexión Redis.
 
-Las direcciones se definen en el servidor y se pasan a `GestorTransacciones.abrir(uriMongo7, uriMongo8, uriRedis)`. Actualmente no se reciben como argumentos de la línea de comandos.
-
-## Ejecución mediante cliente y servidor
-
-Recorrido: `ClienteTransaccionesSimple → ServidorTransaccionesSimple → GestorTransacciones → bases de datos`.
-
-En una terminal, iniciar el servidor:
+Desde la raíz del proyecto, iniciar el servidor:
 
 ```bash
 mvn -Pservidor compile exec:java
@@ -35,91 +36,106 @@ En otra terminal, ejecutar el cliente:
 mvn -Pcliente compile exec:java
 ```
 
-El servidor escucha en el puerto `5000`. Su bucle `while (true)` acepta una conexión, atiende una petición y vuelve a esperar al siguiente cliente. La atención es secuencial: un cliente que no envía su línea mantiene al servidor esperando. Para detener el proceso desde la terminal, utilizar `Ctrl + C`.
+Por defecto utiliza 4 hilos. Para elegir otro número:
 
-El cliente ejecuta la bateria completa: cinco proporciones de lecturas y nueve bloques, con **45 resumenes y 5.110 peticiones**. Abre una conexion por peticion, espera la respuesta y pasa a la siguiente. Las listas estan definidas en el cliente; no hay argumentos de consola.
-
-El protocolo es `READ porcentajeLectura bloque clave` o `WRITE porcentajeLectura bloque clave valor`. Por ejemplo, `WRITE 0.2 8 cuenta1 valor_1` corresponde a un bloque de 8 con 20 % de lecturas. El servidor valida los datos y responde `OK READ ...`, `OK WRITE ...` o `ERROR ...`. El formato antiguo sin escenario ya no es valido.
-
-Los resumenes distinguen peticiones correctas y fallidas. La latencia media por intento incluye conexion, envio y espera de respuesta; el throughput cuenta respuestas correctas por segundo de tiempo total del bloque. Los calculos usan nanosegundos, sin truncar cada peticion a milisegundos. Estas medidas son distintas de las internas del gestor.
-
-La conexion tiene un limite de espera de 5 segundos y la respuesta de 120 segundos. Los fallos de comunicacion se cuentan como intentos fallidos sin reintentar: no confirman que la operacion no se haya aplicado en el servidor.
-
-## Escenarios de los experimentos secuenciales
-
-`WORKLOADS` indica la **proporción de lecturas**. Las escrituras son el resto:
-
-| Valor | Lecturas | Escrituras |
-|---|---:|---:|
-| `0.0` | 0 % | 100 % |
-| `0.2` | 20 % | 80 % |
-| `0.5` | 50 % | 50 % |
-| `0.8` | 80 % | 20 % |
-| `1.0` | 100 % | 0 % |
-
-Cada escenario recorre bloques de **2, 4, 8, 16, 32, 64, 128, 256 y 512 transacciones**. Los valores están definidos en el código. El número de lecturas se redondea a un entero, por lo que en bloques pequeños el porcentaje real puede diferir del solicitado. Las operaciones se mezclan antes de ejecutarse y utilizan las claves `cuenta1` a `cuenta4`.
-
-Se muestran en consola los recuentos, el tiempo total medido, la latencia media y el throughput (transacciones por segundo). El cliente ejecuta estos escenarios a traves del servidor.
-
-## Histórico y errores
-
-El gestor registra las operaciones que alcanzan ese paso en la colección `historico` de `tfg_mongo7`, con ID, tiempos de inicio y fin, duración, `porcentajeLectura` (proporcion entre 0 y 1) y tamaño de bloque. El gestor intenta registrar tanto las operaciones finalizadas como las abortadas. Si falla el propio destino de registro, no se garantiza que quede guardado. El servidor utiliza la proporcion de lecturas y el bloque recibidos del cliente. Los documentos nuevos usan `porcentajeLectura`; los antiguos conservan `workload` y no se migran automaticamente. El porcentaje de escrituras se calcula como `1 - porcentajeLectura`.
-
-Mongo y Redis capturan errores de sus bibliotecas, añaden un mensaje sobre la operación y propagan la excepción conservando su causa. El servidor captura fallos al atender a un cliente y continúa con el siguiente.
-
-Este tratamiento no implementa rollback ni garantiza atomicidad entre las tres bases: si una escritura posterior falla, las anteriores pueden haber quedado aplicadas. Crear un cliente o pool tampoco garantiza por sí solo que el servicio esté disponible.
-
-## Historico CSV (ademas de MongoDB)
-
-El gestor intenta guardar cada registro tanto en MongoDB 7 como en `resultados/historico_transacciones_estados.csv`. La ruta es relativa al directorio desde el que se inicia el servidor; usando los comandos de este README desde la raiz, queda dentro del proyecto.
-
-La carpeta y el archivo se crean al guardar la primera transaccion. El CSV utiliza UTF-8 y comas como separadores, con estas columnas:
-
-```csv
-id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque,estado
+```bash
+mvn -Pcliente compile exec:java "-Dexec.args=8"
 ```
 
-Los tiempos de inicio y fin son milisegundos desde la epoca Unix. `porcentajeLectura` es una proporcion entre 0 y 1 (0.2 significa 20 %). Son los mismos valores enviados al historico de Mongo; el ID corresponde a `_id` en Mongo. La duracion interna se mide antes de guardar en ambos destinos. No contiene los 45 resumenes del cliente.
+Se permite una concurrencia del cliente entre 1 y 64. El servidor tiene 16 hilos. Las conexiones que no pueden atenderse todavía esperan en la cola del servidor; no se consideran transacciones activas hasta entrar en el gestor. Una conexión sin enviar su petición tiene un límite de lectura de 5 segundos.
 
-Cada registro se anade sin borrar filas anteriores; la cabecera solo se escribe si el archivo esta vacio o no existe. Al reiniciar el servidor se sigue anexando al mismo archivo. Para separar sesiones se puede renombrar o mover el CSV con el servidor detenido. Los historicos antiguos de Mongo no se exportan retroactivamente.
+El cliente conserva las cinco proporciones de lecturas (0, 0.2, 0.5, 0.8 y 1) y los nueve bloques (2, 4, 8, 16, 32, 64, 128, 256 y 512): 45 combinaciones y 5.110 peticiones por ejecución. La concurrencia indica el máximo de tareas de envío en curso; el bloque es el total de peticiones, no el número de hilos. Cada bloque termina antes de empezar el siguiente.
 
-En Excel, importar mediante Datos > Desde texto/CSV, seleccionando UTF-8, delimitador coma y punto como separador decimal para `porcentajeLectura` si la configuracion regional lo requiere. El archivo es CSV, no un libro `.xlsx`. La carpeta `resultados/` se excluye de Git para no subir datos generados automaticamente.
+Las lecturas se redondean a un número entero y las operaciones se mezclan. Se usan las claves cuenta1 a cuenta4. Los escenarios pequeños pueden no alcanzar exactamente el porcentaje nominal.
 
-Si falla un destino se intenta el otro y se comunica el error; no hay atomicidad entre el archivo y Mongo. Puede existir un registro en un destino y no en el otro. Si falla una operacion de datos, se intenta registrar ABORTADA en ambos destinos y se propaga el error original.
+Para detener el servidor, Ctrl+C: deja de aceptar conexiones y espera a que terminen las tareas antes de cerrar las bases. El cliente limita la conexión a 5 segundos y la espera de respuesta a 120 segundos.
 
-## CSV de resumenes para las graficas
+## Control de colisiones
 
-Cada ejecucion del cliente crea un archivo nuevo `resultados/resumen_experimentos_FECHA_IDENTIFICADOR.csv` y muestra su ruta. Una ejecucion completa contiene 45 filas (5 mezclas por 9 bloques), que resumen 5.110 peticiones. No sobrescribe ni mezcla los resumenes de ejecuciones anteriores. Si se interrumpe, el archivo puede contener menos filas.
+`ControlConcurrencia` mantiene la transacción activa y un `ReentrantLock`. Los métodos `intentarIniciar` y `finalizar` protegen la comprobación y actualización de ese dato, no las llamadas a las bases.
 
-Incluye proporciones nominales, bloque, lecturas/escrituras realmente enviadas, correctas/fallidas, tiempo total del bloque y suma de tiempos de peticion en nanosegundos, tiempo total en ms, latencia media en ms y throughput en peticiones correctas por segundo. Se mide en el cliente, incluyendo conexion y respuesta del servidor. La escritura de este resumen queda fuera del intervalo medido.
+El inicio de la transacción se fija dentro de la sección protegida de admisión, justo antes de comprobar si hay otra activa. No es la hora de creación del objeto ni la de envío del cliente. La comprobación y el registro son indivisibles respecto a otros hilos. El intervalo termina cuando el gestor entra en `finalizar`, después de las operaciones y antes de persistir el histórico. La escritura del histórico queda fuera de ese intervalo.
 
-- Tiempo total (ms): `tiempoTotalNs / 1000000`.
-- Latencia media por intento (ms): `tiempoPeticionesNs / 1000000 / bloque`.
-- Throughput: `correctas * 1000000000 / tiempoTotalNs`.
+Si hay una transacción activa, la nueva queda ABORTADA con motivo COLISION_TEMPORAL y hora final; no lee ni escribe datos de las cuentas. Sí se intenta guardar su histórico. Si el control está libre, queda admitida y sigue usando las tres bases en secuencia. Una nueva admisión después de liberar el control no colisiona.
 
-Para preparar las graficas en Excel: Datos > Desde texto/CSV, elegir este archivo, delimitador coma, UTF-8 y configuracion regional con punto decimal. Crear una tabla por metrica con bloques en filas y proporciones de lectura en columnas; insertar un grafico de lineas. No se necesita interpretar el log de consola ni ejecutar Python. El libro Excel entregado contiene una copia de un CSV concreto; no se actualiza automaticamente al ejecutar Java otra vez.
+Los tiempos del histórico son milisegundos Unix: dos sucesos consecutivos pueden compartir el mismo milisegundo. La decisión usa el estado protegido por el lock, no una comparación de marcas redondeadas ni la búsqueda de históricos en Mongo. Así se detecta una transacción aún activa, cuyo tiempo final no se conoce todavía. Para reconstruir casos que suceden dentro del mismo milisegundo, esas marcas por sí solas no permiten conocer su orden exacto.
 
-Este archivo es distinto de `historico_transacciones_estados.csv`, que sigue acumulando las duraciones internas del gestor. No deben mezclarse ambas medidas. Los resultados de una sola ejecucion son preliminares, sin estimacion de variabilidad. En estas graficas varia el bloque secuencial; en el TFG de Conrad se estudian tambien clientes concurrentes.
+El gestor libera la transacción admitida en un bloque `finally`, incluso si una operación falla. Una transacción rechazada no puede liberar la posición de otra.
 
-## Pruebas automáticas
+## Estados, respuestas y errores
+
+| Resultado | Estado | Motivo |
+|---|---|---|
+| Operaciones completadas en las tres bases | FINALIZADA | NINGUNO |
+| Otra transacción activa | ABORTADA | COLISION_TEMPORAL |
+| Fallo al validar o ejecutar la operación | ABORTADA | ERROR_OPERACION |
+
+Protocolo de petición:
+
+```text
+READ proporcionLecturas bloque clave
+WRITE proporcionLecturas bloque clave valor
+```
+
+Respuestas: `OK READ ...`, `OK WRITE ...`, `ABORTADA COLISION_TEMPORAL` o `ERROR ...`.
+
+Si las operaciones se completan y falla el histórico, el estado sigue siendo FINALIZADA, pero el servidor responde ERROR. Si hay colisión y falla el registro, también responde ERROR: el cliente no tiene confirmación completa del aborto registrado. Los errores de comunicación no demuestran que la operación no se haya ejecutado.
+
+Mongo y CSV se intentan guardar independientemente. Si fallan la operación y el histórico, se conserva la excepción original y se añade la del histórico como excepción suprimida. ABORTADA por error de operación no deshace posibles escrituras parciales en las bases.
+
+## Archivos de resultados
+
+Todos se guardan en `resultados/`, relativa al directorio de ejecución. Esta carpeta queda excluida de Git.
+
+### Histórico por transacción
+
+El gestor guarda en la colección `historico` de `tfg_mongo7` y en:
+
+`resultados/historico_transacciones_concurrentes.csv`
+
+Columnas:
+
+```csv
+id,tiempoInicio,tiempoFinal,duracionMs,porcentajeLectura,bloque,estado,motivoAborto
+```
+
+El CSV acumula filas de distintas ejecuciones. El servidor comparte un único escritor cuyo método `guardar` es `synchronized`: la comprobación de cabecera y la escritura de cada fila quedan protegidas entre los hilos de este servidor. No coordina varios procesos de servidor escribiendo al mismo archivo.
+
+Los CSV secuenciales antiguos no se modifican. Los registros nuevos de Mongo incluyen motivoAborto; los documentos antiguos se conservan.
+
+### Resúmenes para gráficas
+
+El cliente crea un archivo nuevo por ejecución:
+
+`resultados/resumen_concurrente_FECHA_IDENTIFICADOR.csv`
+
+Incluye los campos anteriores de resumen y añade `concurrencia`, `abortadasColision` y `errores`. Una ejecución completa tiene 45 filas. Si se interrumpe puede tener menos.
+
+- `correctas`: respuestas OK.
+- `abortadasColision`: respuestas ABORTADA COLISION_TEMPORAL.
+- `errores`: otras respuestas o fallos de comunicación.
+- `fallidas = abortadasColision + errores`.
+- `bloque = correctas + abortadasColision + errores`.
+- Tiempo total: desde que se comienzan a entregar las tareas hasta recoger todos los resultados del bloque, sin incluir el guardado del resumen.
+- Latencia media: suma de tiempos desde conexión hasta respuesta (o error), dividida entre todos los intentos. Incluye abortos y errores, no solo éxitos; excluye la espera previa en la cola del cliente.
+- Throughput: respuestas correctas divididas entre segundos del bloque.
+
+No se debe comparar una reducción de latencia como una mejora por sí sola: rechazar peticiones rápidamente puede bajar la media sin aumentar el trabajo completado. Las comparaciones deben incluir los abortos y errores.
+
+Para abrir el CSV en Excel: Datos > Desde texto/CSV, UTF-8 y delimitador coma. En Transformar datos, convertir los decimales con configuración regional Inglés (Estados Unidos). Usar bloques en filas y proporciones de lectura en columnas; excluir Total general de las gráficas y etiquetar ejes y unidades. Guardar el libro con gráficas como .xlsx.
+
+## Pruebas
 
 ```bash
 mvn test
 ```
 
-Hay pruebas de Mongo, Redis y del recorrido de los experimentos. Se comprueban las 45 combinaciones, la transferencia de metadatos, la validacion, el recuento de errores y un intercambio por sockets locales con gestor simulado. Verifican configuración inválida y propagación de errores conservando la causa. Utilizan fallos simulados o un pool cerrado; no necesitan servicios activos ni escriben en las bases reales. No sustituyen las pruebas de integración ni los experimentos de rendimiento.
+Las pruebas no requieren bases activas. Incluyen colisiones simultáneas, lecturas y escrituras sobre claves distintas, intercambio por sockets, liberación del control tras un error, filas CSV concurrentes, los 45 resúmenes y separación entre colisiones y errores.
 
-## Pendiente
+Las pruebas con bases reales son una comprobación adicional; una ejecución no permite sacar conclusiones estadísticas. Los resultados secuenciales anteriores se conservan como referencia, pero los experimentos comparativos requieren condiciones controladas y repeticiones.
 
-- Validar los experimentos completos mediante cliente y servidor contra las bases reales.
-- Ejecutar los nuevos escenarios de 80 % y 100 % de lecturas y revisar los resultados.
-- Preparar las gráficas cuando quede aclarado el diseño experimental.
-- Abordar la concurrencia después de validar la fase secuencial.
+## Referencias y siguiente fase
 
-## Estado de las transacciones
+Se utiliza el TFG de Conrad como referencia general y el TFG de Pablo para estudiar concurrencia, registro y el autómata de la página 35. La regla temporal de esta fase es la simplificación indicada por la tutora; no reproduce el criterio de Pablo para escrituras sobre las mismas cuentas.
 
-El gestor actualiza cada transaccion de INICIADA a FINALIZADA cuando completa las operaciones de lectura o escritura en las tres bases, o a ABORTADA si la validacion de la operacion o su ejecucion falla. En ambos casos asigna t_final e intenta registrar el resultado en Mongo y CSV. Una transaccion terminada no se puede volver a ejecutar con el mismo objeto.
-
-ABORTADA no implica rollback: puede haber escrituras parciales. Si las operaciones terminan pero falla el historico, el estado sigue siendo FINALIZADA y se propaga el error de persistencia; el servidor responde ERROR y el cliente cuenta el intento como fallido. El estado de las operaciones y el exito de la peticion completa son medidas diferentes. Si fallan operacion e historico, se conserva la excepcion de la operacion y se adjunta la del historico.
-
-Los registros nuevos incluyen estado. Se usa historico_transacciones_estados.csv para no mezclar las siete columnas nuevas con las seis del antiguo historico_transacciones.csv, que se conserva sin modificar. Tampoco se modifica el historico antiguo de Mongo. El escritor rechaza cabeceras incompatibles. El CSV de resumenes del cliente mantiene su formato.
+Quedan para después los niveles de consistencia de lectura y escritura, con las indicaciones de la tutora. No se han implementado en esta rama.

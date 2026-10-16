@@ -3,67 +3,66 @@ package com.nicole.tfg;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ServidorTransaccionesSimple {
-
     public static void main(String[] args) {
-
-        int puerto = 5000;
-
-        GestorTransacciones gestor = new GestorTransacciones(
-                new Mongo(),
-                new Mongo(),
-                new Redis()
-        );
-
-        try (ServerSocket serverSocket = new ServerSocket(puerto)) {
-            System.out.println("Servidor escuchando en el puerto " + puerto);
-
-            gestor.abrir(
-                    "mongodb://localhost:27017/tfg_mongo7",
-                    "mongodb://localhost:27018/tfg_mongo8",
-                    "redis://localhost:6379"
-            ); // abrimos conexiones a las 3 BDD
-
-            // Atendemos una conexion cada vez, de forma secuencial.
-            while (true) {
-                // accept() espera hasta que se conecte el siguiente cliente.
-                Socket cliente = serverSocket.accept();
-                try (Socket socket = cliente;
-                     BufferedReader in = new BufferedReader(
-                             new InputStreamReader(socket.getInputStream(), java.nio.charset.StandardCharsets.UTF_8));
-                     PrintWriter out = new PrintWriter(socket.getOutputStream(), true, java.nio.charset.StandardCharsets.UTF_8)) {
-
-                    System.out.println("Cliente conectado: " + socket.getInetAddress());
-
-                    // Esperamos write o read
-
-                    String linea = in.readLine();
-                    if (linea == null) {
-                        System.out.println("Cliente cerró la conexión sin enviar nada.");
-                        continue;
-                    }
-
-                    out.println(procesarPeticion(linea, gestor));
-
-                } catch (Exception e) {
-                    // Un fallo de este cliente no termina el servidor.
-                    System.err.println("Error al atender al cliente:");
-                    e.printStackTrace();
+        GestorTransacciones gestor = new GestorTransacciones(new Mongo(), new Mongo(), new Redis());
+        Thread principal = Thread.currentThread();
+        Thread cierre = null;
+        try (ServerSocket servidor = new ServerSocket(5000);
+             ExecutorService hilos = Executors.newFixedThreadPool(16)) {
+            gestor.abrir("mongodb://localhost:27017/tfg_mongo7",
+                    "mongodb://localhost:27018/tfg_mongo8", "redis://localhost:6379");
+            cierre = new Thread(() -> {
+                try {
+                    servidor.close();
+                    principal.join(150000);
+                } catch (IOException e) {
+                    System.err.println("Error al cerrar el servidor: " + e.getMessage());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            Runtime.getRuntime().addShutdownHook(cierre);
+            System.out.println("Servidor concurrente escuchando en el puerto 5000 (16 hilos)");
+            while (!servidor.isClosed()) {
+                try {
+                    Socket cliente = servidor.accept();
+                    hilos.submit(() -> atenderCliente(cliente, gestor));
+                } catch (SocketException e) {
+                    if (!servidor.isClosed()) throw e;
                 }
             }
-
         } catch (Exception e) {
-            System.err.println(" Error en el servidor:");
-            e.printStackTrace();
+            System.err.println("Error en el servidor: " + e.getMessage());
         } finally {
             try {
                 gestor.cerrar();
             } catch (Exception e) {
-                System.err.println(" Error al cerrar el gestor:");
-                e.printStackTrace();
+                System.err.println("Error al cerrar las bases: " + e.getMessage());
             }
+            if (cierre != null) {
+                try { Runtime.getRuntime().removeShutdownHook(cierre); }
+                catch (IllegalStateException e) { /* La JVM ya esta cerrando. */ }
+            }
+        }
+    }
+
+    static void atenderCliente(Socket cliente, GestorTransacciones gestor) {
+        try (Socket socket = cliente) {
+            socket.setSoTimeout(5000);
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true, StandardCharsets.UTF_8)) {
+                String linea = in.readLine();
+                if (linea != null) out.println(procesarPeticion(linea, gestor));
+            }
+        } catch (IOException e) {
+            System.err.println("Error de conexion: " + e.getMessage());
         }
     }
     // Una peticion lleva los datos del escenario, no solo la operacion.
@@ -87,12 +86,16 @@ public class ServidorTransaccionesSimple {
             return "ERROR Porcentaje fuera de [0,1] o bloque no positivo";
         }
         String clave = partes[3];
+        Transaccion tx = new Transaccion(comando.equals("WRITE") ? "escritura" : "lectura",
+                clave, comando.equals("WRITE") ? partes[4] : null);
         try {
             if (comando.equals("WRITE")) {
-                gestor.ejecutarEscritura(new Transaccion("escritura", clave, partes[4]), porcentajeLectura, bloque);
+                gestor.ejecutarEscritura(tx, porcentajeLectura, bloque);
+                if (tx.getEstado() == Transaccion.Estado.ABORTADA) return "ABORTADA " + tx.getMotivoAborto();
                 return "OK WRITE clave=" + clave;
             }
-            Map<String, String> res = gestor.ejecutarLectura(new Transaccion("lectura", clave, null), porcentajeLectura, bloque);
+            Map<String, String> res = gestor.ejecutarLectura(tx, porcentajeLectura, bloque);
+            if (tx.getEstado() == Transaccion.Estado.ABORTADA) return "ABORTADA " + tx.getMotivoAborto();
             // Una respuesta ocupa siempre una sola linea del protocolo.
             return ("OK READ mongo7=" + res.get("mongo7") + " | mongo8=" + res.get("mongo8")
                     + " | redis=" + res.get("redis")).replace('\r', ' ').replace('\n', ' ');
